@@ -8,7 +8,7 @@ import SwiftUI
 final class FloatingDropPanel: NSPanel {
     private weak var panelController: PermissionFlowController?
     private let hostingView: NSHostingView<AnyView>
-    private let sizingView: NSHostingView<AnyView>
+    private let sizingController: NSHostingController<AnyView>
     private let initialPanelWidth: CGFloat = 420
 
     /// System Settings has a leading sidebar. Matching the trailing content
@@ -37,7 +37,7 @@ final class FloatingDropPanel: NSPanel {
         localeIdentifier = controller.localeIdentifier
         let panelView = Self.makePanelView(controller: controller, localeIdentifier: controller.localeIdentifier)
         hostingView = NSHostingView(rootView: panelView)
-        sizingView = NSHostingView(rootView: panelView)
+        sizingController = NSHostingController(rootView: panelView)
         super.init(
             contentRect: CGRect(origin: .zero, size: CGSize(width: initialPanelWidth, height: minimumPanelHeight)),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -63,7 +63,7 @@ final class FloatingDropPanel: NSPanel {
         // on every layout pass. For the panel content (ultraThinMaterial
         // background + `.fixedSize(vertical: true)` + a markdown-wrapped
         // header `AttributedString`), that intrinsic value diverges from the
-        // `sizingView.fittingSize` that `measuredPanelHeight` uses — so the
+        // height that `measuredPanelHeight` measures — so the
         // window auto-grows well past the content-size we set, and every
         // subsequent `setFrame(...)` from `snap(to:)` is reverted on the
         // next layout tick, leaving the panel stuck off-screen.
@@ -85,7 +85,7 @@ final class FloatingDropPanel: NSPanel {
         guard let panelController else { return }
         let panelView = Self.makePanelView(controller: panelController, localeIdentifier: localeIdentifier)
         hostingView.rootView = panelView
-        sizingView.rootView = panelView
+        sizingController.rootView = panelView
         setContentSize(CGSize(width: frame.width, height: measuredPanelHeight(for: frame.width)))
     }
 
@@ -260,9 +260,10 @@ final class FloatingDropPanel: NSPanel {
     /// Measures the SwiftUI content at a specific width so the panel height can
     /// fit its dynamic contents before being positioned or animated.
     private func measuredPanelHeight(for width: CGFloat) -> CGFloat {
-        sizingView.setFrameSize(NSSize(width: width, height: sizingHeightLimit))
-        sizingView.layoutSubtreeIfNeeded()
-        return max(minimumPanelHeight, sizingView.fittingSize.height)
+        // `fittingSize` ignores the proposed width, so a header that wraps to
+        // two lines at the panel width measured as one line and was clipped.
+        let size = sizingController.sizeThatFits(in: CGSize(width: width, height: sizingHeightLimit))
+        return max(minimumPanelHeight, ceil(size.height))
     }
 
     /// Advances the current launch animation frame-by-frame until the panel
